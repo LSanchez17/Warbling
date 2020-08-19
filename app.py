@@ -5,10 +5,9 @@ from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 
 from forms import UserAddForm, LoginForm, MessageForm
-from models import db, connect_db, User, Message
+from models import db, connect_db, User, Message, Likes
 
 CURR_USER_KEY = "curr_user"
-DEFAULT_IMG = '/static/images/default-pic.png'
 
 app = Flask(__name__)
 
@@ -19,7 +18,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = (
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ECHO'] = False
-app.config['DEBUG_TB_INTERCEPT_REDIRECTS'] = True
+app.config['DEBUG_TB_INTERCEPT_REDIRECTS'] = False
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', "it's a secret")
 toolbar = DebugToolbarExtension(app)
 
@@ -28,8 +27,6 @@ connect_db(app)
 
 ##############################################################################
 # User signup/login/logout
-
-
 @app.before_request
 def add_user_to_g():
     """If we're logged in, add curr user to Flask global."""
@@ -118,16 +115,15 @@ def login():
 def logout():
     """Handle logout of user."""
 
-    flash('Logout Successful!')
     do_logout()
 
+    flash('Logout Successful!', 'success')
     return redirect ('/')
 #*************************************
 
 
 ##############################################################################
 # General user routes:
-
 @app.route('/users')
 def list_users():
     """Page with listing of users.
@@ -159,6 +155,7 @@ def users_show(user_id):
                 .order_by(Message.timestamp.desc())
                 .limit(100)
                 .all())
+
     return render_template('users/show.html', user=user, messages=messages)
 
 
@@ -225,26 +222,24 @@ def profile():
 
     form = UserAddForm()
     user_info = User.query.get_or_404(session[CURR_USER_KEY])
+    back_up = User.query.get_or_404(session[CURR_USER_KEY])
 
     if form.validate_on_submit():
         
         user_info.username = form.username.data
         user_info.email = form.email.data
-        user_info.image_url = form.image_url.data
-        user_info.header_image_url = form.header_image_url.data
-        user_info.bio = form.bio.data
+        user_info.image_url = form.image_url.data or back_up.image_url
+        user_info.header_image_url = form.header_image_url.data or back_up.header_image_url
+        user_info.bio = form.bio.data or back_up.bio
 
         if user_info.authenticate(user_info.username, form.password.data):
-
-            if user_info.image_url == '':
-                user_info.image_url = DEFAULT_IMG
 
             db.session.add(user_info)
             db.session.commit()
 
             return redirect(f'/users/{g.user.id}')
         else:
-            flash('Incorect Password!')
+            flash('Incorect Password!', 'danger')
             return render_template('/users/edit.html', form=form)
 
     return render_template('/users/edit.html', form=form)
@@ -259,17 +254,16 @@ def delete_user():
         flash("Access unauthorized.", "danger")
         return redirect("/")
 
-    do_logout()
-
     db.session.delete(g.user)
     db.session.commit()
-
+    
+    do_logout()
+    
     return redirect("/signup")
 
 
 ##############################################################################
 # Messages routes:
-
 @app.route('/messages/new', methods=["GET", "POST"])
 def messages_add():
     """Add a message:
@@ -317,8 +311,42 @@ def messages_destroy(message_id):
 
 
 ##############################################################################
+# Liking Warbles
+@app.route('/users/<int:user_id>/likes', methods=['GET','POST'])
+def user_likes(user_id):
+    """Displays user's liked warbles & allows for modification"""
+    
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+    
+    which_user = User.query.get_or_404(user_id)
+    likes = Likes.query.get_or_404(user_id)
+
+    return render_template('likes.html', user=which_user, likes=likes)
+
+@app.route('/users/add_like/<int:message_id>', methods=['POST'])
+def add_message_to_likes(message_id):
+    """Add message to likes table"""
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+
+    new_like = Likes(user_id = g.user.id, message_id = message_id)
+
+    db.session.add(new_like)
+    db.session.commit()
+
+    return redirect(request.url_root)
+
+##############################################################################
 # Homepage and error pages
 
+@app.errorhandler(404)
+def page_not_found(err):
+    """Page non existent"""
+
+    return render_template('404.html'), 404
 
 @app.route('/')
 def homepage():
@@ -329,14 +357,21 @@ def homepage():
     """
 
     if g.user:
+
+        following = [follows.id for follows in g.user.following] + [g.user.id]
+        
+        which_likes = Likes.query.filter(Likes.user_id == g.user.id)
+
+        list_likes = [l for l in which_likes]
+
         messages = (Message
-                    .query(User, Message)
-                    .filter(User.following)
+                    .query
+                    .filter(Message.user_id.in_(following))
                     .order_by(Message.timestamp.desc())
                     .limit(100)
                     .all())
 
-        return render_template('home.html', messages=messages)
+        return render_template('home.html', messages=messages, likes=list_likes)
 
     else:
         return render_template('home-anon.html')

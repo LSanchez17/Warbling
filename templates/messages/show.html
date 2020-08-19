@@ -29,6 +29,19 @@
                     <button class="btn btn-outline-primary btn-sm">Follow</button>
                   </form>
                 {% endif %}
+                <div class='col-md-6'>
+                  {% if message.user_id != g.user.id %}
+                        <form method="POST" action="/users/add_like/{{ message.id }}" id="messages-form">
+                          <button class="
+                            btn 
+                            btn-sm 
+                            {{'btn-primary' if message.id in likes else 'btn-secondary'}}"
+                          >
+                          <i class="fa fa-thumbs-up"></i> 
+                          </button>
+                        </form>
+                      {% endif %}
+                </div>
               {% endif %}
             </div>
             <p class="single-message">{{ message.text }}</p>

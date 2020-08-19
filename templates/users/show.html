@@ -15,6 +15,17 @@
           <div class="message-area">
             <a href="/users/{{ user.id }}">@{{ user.username }}</a>
             <span class="text-muted">{{ message.timestamp.strftime('%d %B %Y') }}</span>
+            {% if message.user_id != g.user.id %}
+            <form method="POST" action="/users/add_like/{{ message.id }}" id="messages-form">
+              <button class="
+                btn 
+                btn-sm 
+                {{'btn-primary' if message.id in likes else 'btn-secondary'}}"
+              >
+                <i class="fa fa-thumbs-up"></i> 
+              </button>
+            </form>
+            {% endif %}
             <p>{{ message.text }}</p>
           </div>
         </li>
