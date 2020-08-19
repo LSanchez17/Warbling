@@ -8,6 +8,7 @@ from forms import UserAddForm, LoginForm, MessageForm
 from models import db, connect_db, User, Message
 
 CURR_USER_KEY = "curr_user"
+DEFAULT_IMG = '/static/images/default-pic.png'
 
 app = Flask(__name__)
 
@@ -44,13 +45,17 @@ def do_login(user):
     """Log in user."""
 
     session[CURR_USER_KEY] = user.id
+    #************************
+    add_user_to_g()
 
 
 def do_logout():
-    """Logout user."""
+    """Logout user & remove them from the G object"""
 
     if CURR_USER_KEY in session:
         del session[CURR_USER_KEY]
+        #*******************************
+        g.user = None
 
 
 @app.route('/signup', methods=["GET", "POST"])
@@ -108,12 +113,16 @@ def login():
 
     return render_template('users/login.html', form=form)
 
-
+#*************************************
 @app.route('/logout')
 def logout():
     """Handle logout of user."""
 
-    # IMPLEMENT THIS
+    flash('Logout Successful!')
+    do_logout()
+
+    return redirect ('/')
+#*************************************
 
 
 ##############################################################################
@@ -206,13 +215,41 @@ def stop_following(follow_id):
 
     return redirect(f"/users/{g.user.id}/following")
 
-
+#***************************************************
 @app.route('/users/profile', methods=["GET", "POST"])
 def profile():
     """Update profile for current user."""
+    if not g.user:
+        flash("Access Unauthorized,", "danger")
+        return redirect('/')
 
-    # IMPLEMENT THIS
+    form = UserAddForm()
+    user_info = User.query.get_or_404(session[CURR_USER_KEY])
 
+    if form.validate_on_submit():
+        
+        user_info.username = form.username.data
+        user_info.email = form.email.data
+        user_info.image_url = form.image_url.data
+        user_info.header_image_url = form.header_image_url.data
+        user_info.bio = form.bio.data
+
+        if user_info.authenticate(user_info.username, form.password.data):
+
+            if user_info.image_url == '':
+                user_info.image_url = DEFAULT_IMG
+
+            db.session.add(user_info)
+            db.session.commit()
+
+            return redirect(f'/users/{g.user.id}')
+        else:
+            flash('Incorect Password!')
+            return render_template('/users/edit.html', form=form)
+
+    return render_template('/users/edit.html', form=form)
+
+#****************************************************
 
 @app.route('/users/delete', methods=["POST"])
 def delete_user():
@@ -293,7 +330,8 @@ def homepage():
 
     if g.user:
         messages = (Message
-                    .query
+                    .query(User, Message)
+                    .filter(User.following)
                     .order_by(Message.timestamp.desc())
                     .limit(100)
                     .all())
