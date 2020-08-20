@@ -39,8 +39,8 @@ class MessageViewTestCase(TestCase):
     def setUp(self):
         """Create test client, add sample data."""
 
-        User.query.delete()
-        Message.query.delete()
+        db.drop_all()
+        db.create_all()
 
         self.client = app.test_client()
 
@@ -52,7 +52,7 @@ class MessageViewTestCase(TestCase):
         db.session.commit()
 
     def test_add_message(self):
-        """Can use add a message?"""
+        """Can user add a message?"""
 
         # Since we need to change the session to mimic logging in,
         # we need to use the changing-session trick:
@@ -71,3 +71,32 @@ class MessageViewTestCase(TestCase):
 
             msg = Message.query.one()
             self.assertEqual(msg.text, "Hello")
+
+    def test_add_no_go(self):
+        """Not allowed not logged in"""
+        with self.client as client:
+            resp = client.post('/messages/new', data={'text':'Yello'}, follows_redirects=True)
+            
+            self.assertEqual(resp.status_code, 200)            
+            self.assertIn('Access unauthorized', str(resp.data))
+
+    def test_message_show(self):
+        """Shows message itself independently"""
+
+        message = Message(id=111, text='test warble', user_id=self.new_user_id)
+
+        db.session.add(message)
+        db.session.commit()
+
+        with self.client as client:
+            with client.session_transaction() as session:
+                session[CURR_USER_KEY] = self.new_user_id
+
+            message = Message.query.get(111)
+
+            resp = client.get(f'/messages/{message.id}')
+
+            self.assertEqual(resp.status_code, 200)
+            self.assertIn(message.text, str(resp.data))
+
+
