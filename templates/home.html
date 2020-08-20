@@ -58,7 +58,9 @@
               <p>{{ msg.text }}</p>
             </div>
             {% if msg.user_id != g.user.id %}
-            <form method="POST" action="/users/add_like/{{ msg.id }}" id="messages-form">
+            {% set delete_url = '/users/likes/delete/'~msg.id %}
+            {% set add_like_url = '/users/add_like/'~msg.id %}
+            <form method="POST" action="{{ delete_url if msg.id in likes else add_like_url }}" id="messages-form">
               <button class="
                 btn 
                 btn-sm 

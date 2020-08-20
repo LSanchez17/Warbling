@@ -156,7 +156,12 @@ def users_show(user_id):
                 .limit(100)
                 .all())
 
-    return render_template('users/show.html', user=user, messages=messages)
+
+    #*****************************************
+    which_likes = Likes.query.filter(Likes.user_id == g.user.id).all()
+    list_likes_msgid = [l.message_id for l in which_likes]
+
+    return render_template('users/show.html', user=user, messages=messages, likes=list_likes_msgid)
 
 
 @app.route('/users/<int:user_id>/following')
@@ -312,7 +317,8 @@ def messages_destroy(message_id):
 
 ##############################################################################
 # Liking Warbles
-@app.route('/users/<int:user_id>/likes', methods=['GET','POST'])
+#*******************************************************************
+@app.route('/users/<int:user_id>/likes', methods=['GET'])
 def user_likes(user_id):
     """Displays user's liked warbles & allows for modification"""
     
@@ -321,10 +327,29 @@ def user_likes(user_id):
         return redirect("/")
     
     which_user = User.query.get_or_404(user_id)
-    likes = Likes.query.get_or_404(user_id)
 
-    return render_template('likes.html', user=which_user, likes=likes)
+    which_likes = Likes.query.filter(Likes.user_id == user_id)
+    likes_by_id = [l.message_id for l in which_likes]
 
+    which_messages = Message.query.filter(Message.id.in_(likes_by_id)).all()
+
+    return render_template('likes.html', likes=which_messages, user=which_user, change_button=likes_by_id)
+
+@app.route('/users/likes/delete/<int:message_id>', methods=['POST'])
+def remove_like(message_id):
+    """Removes a like if liked already"""
+
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+
+    liked_to_remove = Message.query.get(message_id)
+    g.user.likes.remove(liked_to_remove)
+    db.session.commit()
+
+    return redirect(request.url_root)
+
+#******************************************************************
 @app.route('/users/add_like/<int:message_id>', methods=['POST'])
 def add_message_to_likes(message_id):
     """Add message to likes table"""
@@ -342,12 +367,15 @@ def add_message_to_likes(message_id):
 ##############################################################################
 # Homepage and error pages
 
+#******************************************************
 @app.errorhandler(404)
 def page_not_found(err):
     """Page non existent"""
 
     return render_template('404.html'), 404
 
+
+#***************************************************************
 @app.route('/')
 def homepage():
     """Show homepage:
@@ -360,9 +388,8 @@ def homepage():
 
         following = [follows.id for follows in g.user.following] + [g.user.id]
         
-        which_likes = Likes.query.filter(Likes.user_id == g.user.id)
-
-        list_likes = [l for l in which_likes]
+        which_likes = Likes.query.filter(Likes.user_id == g.user.id).all()
+        list_likes_msgid = [l.message_id for l in which_likes]
 
         messages = (Message
                     .query
@@ -371,7 +398,7 @@ def homepage():
                     .limit(100)
                     .all())
 
-        return render_template('home.html', messages=messages, likes=list_likes)
+        return render_template('home.html', messages=messages, likes=list_likes_msgid)
 
     else:
         return render_template('home-anon.html')

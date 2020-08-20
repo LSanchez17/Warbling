@@ -1,10 +1,43 @@
 {% extends 'base.html' %}
-{% block start %}
 
-{% for l in likes %}
 
-<h1>This works?{{l}}</h1>
+{% block content %}
 
-{% endfor %}
+<div class="col-lrg-3">
+    <h2 class='message-area fluid'>{{user.username}}'s Liked Messages</h2>
+    <ul class="list-group" id="messages">
+        {% for message in likes %}
+        <li class="list-group-item">
+          <a href="/messages/{{ message.id }}" class="message-link"/>
+          <a href="/users/{{ message.user_id }}">
+            <img src="{{ message.user.image_url }}" alt="user image" class="timeline-image">
+          </a>
+
+          <div class="message-area">
+            <a href="/users/{{ message.user_id }}">@{{ message.user.username }}</a>
+            <span class="text-muted">{{ message.timestamp.strftime('%d %B %Y') }}</span>
+            {% if message.user_id != g.user.id %}
+
+            {% set delete_url = '/users/likes/delete/'~message.id %}
+            {% set add_like_url = '/users/add_like/'~message.id %}
+
+            <form method="POST" action="{{ delete_url if message.id in change_button else add_like_url }}" id="messages-form">
+              <button class="
+                btn 
+                btn-sm 
+                {{'btn-primary' if message.id in change_button else 'btn-secondary'}}"
+              >
+                <i class="fa fa-thumbs-up"></i> 
+              </button>
+            </form>
+            {% endif %}
+            <p>{{ message.text }}</p>
+          </div>
+        </li>
+
+      {% endfor %}
+
+    </ul>
+  </div>
 
 {% endblock %}
